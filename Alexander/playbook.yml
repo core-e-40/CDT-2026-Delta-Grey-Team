@@ -1,0 +1,8 @@
+- name: Deploy vulnerable Samba CVE-2017-7494
+  hosts: sambahost
+  become: true
+  vars_files:
+    - vars/main.yml
+
+  roles:
+    - samba

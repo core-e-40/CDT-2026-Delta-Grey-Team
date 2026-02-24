@@ -1,0 +1,2 @@
+- name: Restart Samba
+  command: "{{ smbd_binary }} -D"

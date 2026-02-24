@@ -1,0 +1,38 @@
+- name: Check if vulnerable Samba is already built
+  stat:
+    path: "{{ smbd_binary }}"
+  register: samba_installed
+
+- name: Copy Samba source archive
+  copy:
+    src: "{{ samba_src_archive }}"
+    dest: "/usr/src/{{ samba_src_archive }}"
+  when: not samba_installed.stat.exists
+
+- name: Extract Samba source
+  unarchive:
+    src: "/usr/src/{{ samba_src_archive }}"
+    dest: /usr/src
+    remote_src: yes
+  when: not samba_installed.stat.exists
+
+- name: Configure Samba build
+  command: >
+    ./configure
+    --prefix={{ samba_prefix }}
+    --without-ad-dc
+  args:
+    chdir: "{{ samba_build_dir }}"
+  when: not samba_installed.stat.exists
+
+- name: Compile Samba
+  command: make -j{{ ansible_processor_vcpus | default(2) }}
+  args:
+    chdir: "{{ samba_build_dir }}"
+  when: not samba_installed.stat.exists
+
+- name: Install Samba
+  command: make install
+  args:
+    chdir: "{{ samba_build_dir }}"
+  when: not samba_installed.stat.exists

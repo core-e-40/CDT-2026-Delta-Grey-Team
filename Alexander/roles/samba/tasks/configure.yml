@@ -1,0 +1,12 @@
+- name: Create Samba share directory
+  file:
+    path: "{{ smb_share_path }}"
+    state: directory
+    mode: "0777"
+
+- name: Deploy smb.conf
+  template:
+    src: smb.conf.j2
+    dest: "{{ smb_conf_path }}"
+    mode: "0644"
+  notify: Restart Samba

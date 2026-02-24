@@ -1,0 +1,9 @@
+- name: Start smbd
+  command: "{{ smbd_binary }} -D"
+  args:
+    creates: /var/run/samba/smbd.pid
+
+- name: Start nmbd
+  command: "{{ nmbd_binary }} -D"
+  args:
+    creates: /var/run/samba/nmbd.pid

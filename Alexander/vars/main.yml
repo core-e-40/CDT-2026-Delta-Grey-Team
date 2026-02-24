@@ -1,0 +1,11 @@
+samba_version: "4.5.9"
+samba_prefix: "/opt/samba-{{ samba_version }}"
+samba_src_archive: "samba-{{ samba_version }}.tar.gz"
+samba_build_dir: "/usr/src/samba-{{ samba_version }}"
+
+smb_share_name: "vulnshare"
+smb_share_path: "/srv/samba/vulnshare"
+
+smb_conf_path: "{{ samba_prefix }}/etc/smb.conf"
+smbd_binary: "{{ samba_prefix }}/sbin/smbd"
+nmbd_binary: "{{ samba_prefix }}/sbin/nmbd"

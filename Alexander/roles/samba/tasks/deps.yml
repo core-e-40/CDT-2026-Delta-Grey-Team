@@ -1,0 +1,23 @@
+- name: Install build dependencies
+  apt:
+    name:
+      - build-essential
+      - python2
+      - perl
+      - pkg-config
+      - libacl1-dev
+      - libattr1-dev
+      - libblkid-dev
+      - libgnutls28-dev
+      - libreadline-dev
+      - libldap2-dev
+      - libpam0g-dev
+      - libaio-dev
+      - libkrb5-dev
+      - libsystemd-dev
+      - libcap-dev
+      - libbsd-dev
+      - wget
+      - tar
+    state: present
+    update_cache: yes

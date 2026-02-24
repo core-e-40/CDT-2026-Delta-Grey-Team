@@ -1,0 +1,69 @@
+# Main tasks for VSFTPD role
+
+# Defines the main logic for deploying the FTP service
+
+# Makes suire the vsftpd daemon is installed on the target system
+- name: Install vsftpd package
+  ansible.builtin.apt:
+    name: vsftpd
+    state: present
+    update_cache: yes
+
+# Creates the directory structure for FTP service and sets permissions of anyone can access for lab with 0777
+- name: Create FTP root and public drop-zone
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ftp
+    group: ftp
+    mode: '0777'
+  loop:
+    - "{{ ftp_root_dir }}"
+    - "{{ ftp_root_dir }}/public"
+
+# Deploys vsftpd.conf file
+- name: Deploy vsftpd.conf
+  ansible.builtin.template:
+    src: vsftpd.conf.j2
+    dest: /etc/vsftpd.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart vsftpd
+
+# creates local linux user account to simulate a dev profile with having sudo privilege and escalation of priv after an attacker finds vulnerability
+# Mainly due to bad configuration
+- name: Create vulnerable local user for pivot demonstration
+  ansible.builtin.user:
+    name: "{{ ftp_user }}"
+    password: "{{ ftp_pass | password_hash('sha512') }}"
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+
+- name: Secure the FTP root directory
+  ansible.builtin.file:
+    path: "{{ ftp_root_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create the Vulnerable public drop-zone
+  ansible.builtin.file:
+    path: "{{ ftp_root_dir }}/public"
+    state: directory
+    owner: ftp
+    group: ftp
+    mode: '0777'
+
+- name: Create "leaked" credential file for exploitation discovery
+  ansible.builtin.copy:
+    dest: "{{ ftp_root_dir }}/public/.dev_notes.txt"
+    content: |
+      # Testing credentials for pivot targets ({{ app_server_ip }} and {{ db_server_ip }}):
+      # User: {{ ftp_user }}
+      # Pass: {{ ftp_pass }}
+    owner: ftp
+    group: ftp
+    mode: '0644'

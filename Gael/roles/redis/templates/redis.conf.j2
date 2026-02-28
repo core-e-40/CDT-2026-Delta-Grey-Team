@@ -1,0 +1,52 @@
+# Managed by Ansible
+# Testing that template works. Need to work on updating these values
+
+protected-mode yes
+
+# Bind to localhost for now
+bind {{ redis_bind_address }}
+port {{ redis_port }}
+
+loglevel warning
+
+# Working directory for persistence
+dir {{ redis_rdb_dir }}
+dbfilename {{ redis_rdb_filename }}
+
+{% for rule in redis_rdb_snapshots %}
+save {{ rule.seconds }} {{ rule.changes }}
+{% endfor %}
+
+stop-writes-on-bgsave-error no
+rdbcompression yes
+rdbchecksum yes
+
+appendonly yes
+appendfilename "redis-save.aof"
+# Durability: fsync every second
+appendfsync everysec
+
+# Disable default user, create our own
+user default off
+user {{ redis_user }} on >{{ redis_password }} ~* +@all -@dangerous
+
+# Create allowed users with allowed commands
+{% for user in redis_allowed_users %}
+user {{ user.name }} on >{{ user.password }} {{ user.key_pattern }} {{ user.rules }}
+{% endfor %}
+
+daemonize no
+supervised systemd
+
+databases 16
+
+# Rename or disable dangerous commands
+# Empty command names mean the command is disabled
+{% for command, new_name in redis_rename_commands.items() %}
+rename-command {{ command }} {{ new_name }}
+{% endfor %}
+
+tcp-keepalive 300
+
+maxmemory 256mb
+maxmemory-policy noeviction

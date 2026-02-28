@@ -1,0 +1,29 @@
+listen=YES
+listen_ipv6=NO
+
+anonymous_enable=YES
+no_anon_password=YES
+local_enable=YES
+write_enable=YES
+
+anon_upload_enable=YES
+anon_mkdir_write_enable=YES
+anon_other_write_enable=YES
+
+dirmessage_enable=YES
+use_localtime=YES
+xferlog_enable=YES
+connect_from_port_20=YES
+
+chroot_local_user=NO
+allow_writeable_chroot=YES
+
+pam_service_name=vsftpd
+user_sub_token=$USER
+local_root=/var/www/html/uploads
+
+ftpd_banner={{ ftp_banner }}
+
+# Weak logging and no rate limiting
+max_clients=0
+max_per_ip=0

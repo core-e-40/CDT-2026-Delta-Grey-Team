@@ -1,0 +1,107 @@
+# =============================================================================
+# Vulnerable Ansible Playbook
+# =============================================================================
+
+---
+- name: Deploy Vulnerable FTP Server
+  hosts: nginxftp
+  become: true
+  vars_files:
+    - vars/main.yml
+
+  # Need to seperate Tasks into seperate folder
+  tasks:
+
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+
+    - name: Install FTP server
+      ansible.builtin.apt:
+        name: "{{ ftp_package }}"
+        state: present
+
+    - name: Create vulnerable FTP users
+      ansible.builtin.user:
+        name: "{{ item.name }}"
+        password: "{{ item.password | password_hash('sha512') }}"
+        home: "{{ item.home }}"
+        shell: /bin/bash
+      loop: "{{ ftp_users }}"
+
+    - name: Ensure FTP user home directories are writable
+      ansible.builtin.file:
+        path: "{{ item.home }}"
+        owner: "{{ item.name }}"
+        group: "{{ item.name }}"
+        mode: "0777"
+      loop: "{{ ftp_users }}"
+
+    - name: Create insecure uploads directory for FTP and web access (INTENTIONAL)
+      ansible.builtin.file:
+        path: /var/www/html/uploads
+        state: directory
+        owner: root
+        group: root
+        mode: "0777"
+
+    - name: Deploy vulnerable vsftpd configuration
+      ansible.builtin.template:
+        src: vsftpd.conf.j2
+        dest: /etc/vsftpd.conf
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart FTP
+
+    - name: Enable and start FTP service
+      ansible.builtin.service:
+        name: "{{ ftp_service }}"
+        state: started
+        enabled: yes
+
+    - name: Install Apache and PHP
+      ansible.builtin.apt:
+        name: "{{ [apache_package] + php_packages }}"
+        state: present
+        update_cache: true
+
+    - name: Deploy vulnerable Apache config
+      ansible.builtin.template:
+        src: apache-site.conf.j2
+        dest: /etc/apache2/sites-available/000-default.conf
+      notify: Restart Apache
+
+    - name: Deploy vulnerable PHP page
+      ansible.builtin.copy:
+        src: vulnerable.php
+        dest: "{{ web_root }}/index.php"
+        mode: "0666"
+
+    - name: Make web root
+      ansible.builtin.file:
+        path: "{{ web_root }}"
+        mode: "0755"
+
+    - name: Enable Apache and start
+      ansible.builtin.service:
+        name: "{{ apache_service }}"
+        state: started
+        enabled: true
+
+    - name: Remove default index file
+      ansible.builtin.file:
+        path: /var/www/html/index.html
+        state: absent
+
+  # Need to seperate Handlers into seperate folder
+  handlers:
+    - name: Restart FTP
+      ansible.builtin.service:
+        name: "{{ ftp_service }}"
+        state: restarted
+
+    - name: Restart Apache
+      ansible.builtin.service:
+        name: apache2
+        state: restarted

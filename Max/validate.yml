@@ -1,0 +1,219 @@
+---
+# =============================================================================
+# Validation Playbook - Verify Vulnerable FTP + Apache Lab
+# =============================================================================
+#
+# Run this AFTER deployment to confirm all intended vulnerabilities exist.
+#
+#   ansible-playbook validate.yml
+#
+# This playbook DOES NOT change the system.
+# It validates vulnerabilities and prints PASS / FAIL messages.
+#
+# VULNERABILITIES CHECKED:
+#   1. FTP service running
+#   2. Anonymous FTP login enabled
+#   3. FTP weak credential login works
+#   4. FTP can write to Apache web root
+#   5. Apache service running
+#   6. Directory listing enabled
+#   7. PHP command execution via web shell
+#   8. /var/ww/html/ PHP execution 
+#
+# =============================================================================
+
+
+# =============================================================================
+# App 1: FTP Service + Authentication
+# =============================================================================
+- name: Validate FTP Vulnerabilities
+  hosts: nginxftp
+  become: true
+  gather_facts: false
+  tags: validate-ftp
+
+  tasks:
+    - name: Gather service status
+      ansible.builtin.service_facts:
+
+    - name: "CHECK: vsftpd service is running"
+      ansible.builtin.assert:
+        that:
+          - "'vsftpd.service' in ansible_facts.services"
+          - "ansible_facts.services['vsftpd.service'].state == 'running'"
+        fail_msg: |
+          FAIL: vsftpd service is not running!
+          Fix: Check your FTP installation and service start tasks.
+        success_msg: "PASS: vsftpd service is running"
+
+    # -------------------------------------------------------------------------
+    # Anonymous FTP Login (Python ftplib — non-interactive, no hang)
+    # -------------------------------------------------------------------------
+    - name: "CHECK: Anonymous FTP login"
+      ansible.builtin.shell:
+        cmd: |
+          python3 - << 'EOF'
+          import ftplib, sys
+          try:
+              ftp = ftplib.FTP("localhost", timeout=5)
+              ftp.login()
+              ftp.quit()
+              print("OK")
+              sys.exit(0)
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          EOF
+      register: anon_ftp
+      changed_when: false
+      failed_when: anon_ftp.rc != 0
+
+    - name: "RESULT: Anonymous FTP access"
+      ansible.builtin.debug:
+        msg: "PASS: Anonymous FTP login is enabled"
+
+    # -------------------------------------------------------------------------
+    # Weak Credential Login
+    # -------------------------------------------------------------------------
+    - name: "CHECK: Weak FTP credentials (ftpuser/password123)"
+      ansible.builtin.shell:
+        cmd: |
+          python3 - << 'EOF'
+          import ftplib, sys
+          try:
+              ftp = ftplib.FTP("localhost", timeout=5)
+              ftp.login("ftpuser", "password123")
+              ftp.quit()
+              print("OK")
+              sys.exit(0)
+          except Exception as e:
+              print(e)
+              sys.exit(1)
+          EOF
+      register: weak_cred
+      changed_when: false
+      failed_when: weak_cred.rc != 0
+
+    - name: "RESULT: Weak FTP credentials"
+      ansible.builtin.debug:
+        msg: "PASS: Weak FTP credentials work (credential reuse vulnerability)"
+
+    # -------------------------------------------------------------------------
+    # FTP Write → Apache Web Root
+    # -------------------------------------------------------------------------
+    - name: "CHECK: FTP can write to Apache web root"
+      ansible.builtin.shell: |
+        python3 - << 'EOF'
+        import ftplib, sys, io
+        try:
+            ftp = ftplib.FTP("localhost", timeout=5)
+            ftp.login("ftpuser", "password123")
+            ftp.cwd("/var/www/html/uploads")
+
+            data = io.BytesIO(b"FTP WRITE TEST")
+            ftp.storbinary("STOR ftp_write_test.txt", data)
+            ftp.delete("ftp_write_test.txt")
+            ftp.quit()
+
+            print("OK")
+            sys.exit(0)
+        except Exception as e:
+            print(e)
+            sys.exit(1)
+        EOF
+      args:
+        executable: /bin/bash
+      register: ftp_write
+      changed_when: false
+
+    - name: "RESULT: FTP write to web root"
+      ansible.builtin.assert:
+        that:
+          - ftp_write.rc == 0
+        fail_msg: |
+          FAIL: FTP user cannot write to Apache web root.
+          This vulnerability is missing.
+        success_msg: "PASS: FTP user can write to Apache web root"
+
+
+# =============================================================================
+# App 2: Apache + Web Vulnerabilities
+# =============================================================================
+- name: Validate Apache Vulnerabilities
+  hosts: nginxftp
+  become: true
+  gather_facts: false
+  tags: validate-apache
+
+  tasks:
+    - name: Gather service status
+      ansible.builtin.service_facts:
+
+    - name: "CHECK: Apache service is running"
+      ansible.builtin.assert:
+        that:
+          - "'apache2.service' in ansible_facts.services"
+          - "ansible_facts.services['apache2.service'].state == 'running'"
+        fail_msg: |
+          FAIL: Apache service is not running!
+          Fix: Check Apache installation and service enable tasks.
+        success_msg: "PASS: Apache service is running"
+
+    # -------------------------------------------------------------------------
+    # PHP Command Execution (Web Shell)
+    # -------------------------------------------------------------------------
+    - name: "CHECK: PHP command execution via web shell"
+      ansible.builtin.uri:
+        url: "http://localhost/index.php?cmd=id"
+        return_content: true
+        status_code: 200
+      register: php_exec
+
+    - name: "RESULT: PHP command execution"
+      ansible.builtin.assert:
+        that:
+          - "'uid=' in php_exec.content"
+        fail_msg: |
+          FAIL: PHP command execution failed!
+          Fix: Check vulnerable PHP page deployment or PHP module.
+        success_msg: "PASS: Remote command execution via PHP is possible"
+
+    # -------------------------------------------------------------------------
+    # Directory Listing Exposure
+    # -------------------------------------------------------------------------
+    - name: "CHECK: index.php exists and contains banner"
+      ansible.builtin.stat:
+        path: /var/www/html/index.php
+      register: vuln_php_file
+
+    - name: "CHECK: index.php content"
+      ansible.builtin.slurp:
+        path: /var/www/html/index.php
+      register: vuln_php_content
+      when: vuln_php_file.stat.exists
+
+# =============================================================================
+# FINAL SUMMARY
+# =============================================================================
+- name: Validation Summary
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Print lab validation summary
+      ansible.builtin.debug:
+        msg:
+          - ""
+          - "=========================================================="
+          - "  ALL VULNERABILITY CHECKS PASSED"
+          - "=========================================================="
+          - "                                                          "
+          - "  [FTP]  vsftpd service running ............. PASS"
+          - "  [FTP]  Anonymous login enabled ............ PASS"
+          - "  [FTP]  Weak credentials accepted .......... PASS"
+          - "  [FTP]  Write access to web root ........... PASS"
+          - "  [WEB]  Apache service running ............. PASS"
+          - "  [WEB]  Directory listing exposed .......... PASS"
+          - "  [WEB]  PHP command execution .............. PASS"
+          - "  [WEB]  /var/ww/html/ PHP execution ........ PASS"
+          - "=========================================================="

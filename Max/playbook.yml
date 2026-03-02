@@ -4,7 +4,7 @@
 
 ---
 - name: Deploy Vulnerable FTP Server
-  hosts: nginxftp
+  hosts: vsftpd
   become: true
   vars_files:
     - vars/main.yml

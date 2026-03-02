@@ -1,3 +1,9 @@
+- name: Install Python3
+  ansible.builtin.apt:
+    name: python3
+    state: present
+    update_cache: yes
+
 - name: Check if vulnerable Samba is already built
   stat:
     path: "{{ smbd_binary }}"

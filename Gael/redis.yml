@@ -1,6 +1,6 @@
 ---
 - name: Deploy Redis
-  hosts: all
+  hosts: database
   become: true
 
   roles:

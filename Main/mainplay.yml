@@ -1,0 +1,5 @@
+---
+- import_playbook: ../Max/playbook.yml
+- import_playbook: ../Cory/playbook.yml
+- import_playbook: ../Gael/redis.yml
+- import_playbook: ../Alexander/playbook.yml
